@@ -1,0 +1,73 @@
+int buttonState = 0;
+const int buttonPin = 2;
+bool gameStarted = false; 
+int oldButton;
+
+int buttonNext= 0; 
+const int buttonPin2= 3;
+bool levelTwoStarted= false;
+int oldButton2; 
+
+void setup() {
+  Serial.begin(9600);  
+  pinMode(buttonPin, INPUT);  
+  pinMode (buttonPin2, INPUT);
+}
+
+void loop() {
+  int sensor1 = analogRead(A0);
+  int sensor2 = analogRead(A1);
+  int sensor3 = analogRead(A2);
+  int sensor4 = analogRead(A3);
+  int sensor5 = analogRead(A4);
+  int sensor6 = analogRead(A5);
+
+  buttonState = digitalRead(buttonPin);
+  buttonNext = digitalRead(buttonPin2);
+
+  if (buttonState == HIGH && oldButton == LOW) {
+    gameStarted = true;
+  } else {
+    gameStarted = false;
+  }
+  oldButton = buttonState;
+
+  if (buttonNext == HIGH) {
+    levelTwoStarted = true;
+  } else {
+    levelTwoStarted = false;
+  }
+  oldButton2 = buttonNext;
+  
+  delay(100);
+
+  Serial.print(sensor1);
+  Serial.print(",");
+  Serial.print(sensor2);
+  Serial.print(",");
+  Serial.print(sensor3);
+  Serial.print(",");
+  Serial.print(sensor4);
+  Serial.print(",");
+  Serial.print(sensor5);
+  Serial.print(",");
+  Serial.print(sensor6);
+
+  Serial.print(",");
+  if (gameStarted) {
+    Serial.print(1);
+  } else {
+    Serial.print(0);
+  }
+  Serial.print(",");
+
+  if (levelTwoStarted) {
+    Serial.print(1);
+    Serial.println();
+  } else {
+    Serial.print(0);
+    Serial.println();
+  }
+
+  delay(100);
+}
