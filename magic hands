@@ -1,0 +1,504 @@
+import processing.sound.*;
+import processing.serial.*;
+
+SoundFile file;
+SoundFile flowerSound;
+SoundFile soundEffect;
+Serial myPort;
+
+int NUM_OF_VALUES_FROM_ARDUINO = 8;
+int[] arduinoValues = new int[NUM_OF_VALUES_FROM_ARDUINO];
+
+int buttonStart = 0;
+int buttonNext = 0;
+
+boolean gameStarted = false;
+boolean levelTwoStarted = false;
+
+PFont myfont;
+PFont descriptionFont;
+
+String gameTitle = "MAGIC HANDS";
+String gameDescription = "Press the green button to begin the challenge.";
+
+PImage photo;
+PImage level2Image;
+PImage sunImage;
+PGraphics rightCanvas;
+
+boolean sunDrawn = false;
+
+int secondsLeft;
+int startTime;
+boolean timerFinished = false;
+
+long pressMillis;
+
+int forceValue = 0;
+boolean triangleVisible = false;
+float triangleX = -150;
+float trianglexSpeed = 1;
+
+int forceValue2 = 0;
+boolean squareVisible = false;
+float squareX = -150;
+float squarexSpeed = 1;
+
+int forceValue3 = 0;
+boolean circleVisible = false;
+float circleX = -150;
+float circlexSpeed = 1;
+
+int forceValue4 = 0;
+int triangleColorIndex = 0;
+
+int forceValue5 = 0;
+int squareColorIndex = 0;
+
+int forceValue6 = 0;
+int circleColorIndex = 0;
+
+color[] triangleColors = {color(255, 255, 255), color(255, 255, 0), color(255, 0, 0), color(0, 0, 255)};
+color[] squareColors = {color(255, 255, 255), color(0, 255, 0), color(255, 165, 0), color(255, 255, 0)};
+color[] circleColors = {color(255, 255, 255), color(255, 0, 0), color(0, 255, 0), color(0, 0, 255)};
+
+boolean triangleColorCycling = false;
+boolean squareColorCycling = false;
+boolean circleColorCycling = false;
+
+
+float[] xs = new float[160];
+float[] ys = new float[160];
+float[] sizes = new float[160];
+color[] colors = new color[160];
+float[] xspeed = new float[160];
+float[] yspeed = new float[160];
+
+float minSize = 10;  // Minimum flower size
+float maxSize = 50;  // Maximum flower size
+float sizeIncrement = 5;
+
+color[] timeOfDayColors = {color(255, 165, 0),    // Afternoon (orange)
+                            color(0, 0, 128),      // Nighttime (dark blue)
+                            color(135, 206, 235)}; // Daytime (light blue)
+
+int currentBackgroundColorIndex = 0;  // To store the selected background color
+boolean colorChanged = false;
+
+color[] petalColors = {
+  color(255, 223, 0),    // Yellow
+  color(0, 255, 255),    // Cyan
+  color(0, 128, 0),      // Dark Green
+  color(255, 140, 0),    // Orange
+  color(75, 0, 130),     // Indigo
+  color(255, 105, 180)   // Hot Pink
+};
+
+int currentPetalColorIndex = 0;  // Default color index
+boolean petalColorChanged = false;
+
+boolean soundPlayed = false;
+
+boolean effectPlayed= false; 
+
+int soundStartMillis = -1;
+// State variable to handle the game state
+int gameState = 0;  // 0 = Menu, 1 = Game Start, 2 = Level Two
+
+void setup() {
+  size(800, 600);
+
+  file = new SoundFile(this, "Yoshi's.mp3");
+  file.play();
+
+  flowerSound = new SoundFile(this, "Yayyy! Sound Effect.mp3");
+  soundEffect = new SoundFile(this, "Camion.mp3"); 
+
+  myfont = createFont("Wonderbar-pALD.ttf", 60);
+  descriptionFont = createFont("SimpleBold-MVaZe.otf", 20);
+  photo = loadImage("level1.png");
+  level2Image = loadImage("level2.png");
+  sunImage = loadImage ("sun.png");
+
+  rightCanvas = createGraphics(width / 2, height);
+
+  for (int i = 0; i < 160; i++) {
+    xs[i] = random(rightCanvas.width);  // Flowers on the right half (width of rightCanvas)
+    ys[i] = random(rightCanvas.height / 2, rightCanvas.height);  // Flowers within the height of rightCanvas
+    sizes[i] = random(15, 40);  // Random flower size
+    xspeed[i] = random(-5, 5);  // Random horizontal speed
+    yspeed[i] = random(-3, 3);  // Random vertical speed
+  }
+
+  startTime = millis();
+
+  printArray(Serial.list());
+  myPort = new Serial(this, "/dev/cu.usbmodem14201", 9600); // Adjust the port as needed
+}
+
+void draw() {
+  background(0);
+  
+  // Get serial data and update button states
+  getSerialData();
+
+  // Switch between different game states
+  if (gameState == 0) {  // Menu
+    showMenu();
+  } else if (gameState == 1) {  // Game Start
+    startGame();
+  } else if (gameState == 2) {  // Level Two
+    level2();
+  }
+}
+
+void showMenu() {
+  buttonStart = arduinoValues[6]; // Assuming buttonStart is on index 6
+
+  // Background color gradient
+  for (int y = 0; y < height; y++) {
+    color c = lerpColor(color(163, 74, 174), color(127, 221, 234), map(y, 0, height, 0, 1));
+    stroke(c);
+    line(0, y, width, y);
+  }
+
+  textFont(myfont);
+  fill(255, 223, 0);
+  textSize(80);
+  text(gameTitle, width / 5, height / 2);
+
+  textFont(descriptionFont);
+  fill(255);
+  textSize(20);
+  text(gameDescription, width / 2, height / 2 + 100);
+
+  // Check if buttonStart is pressed to transition to Game Start
+  if (buttonStart == 1) {
+    gameState = 1;  // Transition to Game Start
+  }
+}
+
+void startGame() {
+  
+  forceValue= arduinoValues[0];
+  forceValue2 = arduinoValues[1];
+  forceValue3 = arduinoValues[2];
+  forceValue4 = arduinoValues[3];
+  forceValue5 = arduinoValues[4];
+  forceValue6 = arduinoValues[5];
+    buttonNext = arduinoValues[7];
+    
+  image(photo, 0, 0, width / 2, height);
+
+  rightCanvas.beginDraw();
+  rightCanvas.background(251, 246, 242);
+
+  rightCanvas.fill(6, 5, 6);
+  rightCanvas.textFont(descriptionFont);
+  rightCanvas.textSize(25);
+  rightCanvas.textAlign(CENTER, TOP);
+  rightCanvas.text("Draw here", rightCanvas.width / 2, 50);
+updateTimer();
+
+  displayTimer();
+
+  displayShapes();
+ 
+  moveShapes();
+
+  rightCanvas.endDraw();
+  
+
+  image(rightCanvas, width / 2, 0);
+
+  // Check if buttonNext is pressed to transition to Level Two
+  buttonNext = arduinoValues[7];  // Assuming buttonNext is on index 7
+  if (buttonNext == 1) {
+    gameState = 2;  // Transition to Level Two
+  }
+}
+void updateTimer() {
+  int elapsedTime = millis() - startTime;
+
+  if (elapsedTime >= 120000 && !timerFinished) {
+    timerFinished = true;
+    println("2 minutes is up!");
+  }
+}
+
+void displayTimer() {
+  rightCanvas.fill(0);
+  rightCanvas.textSize(24);
+  rightCanvas.textAlign(RIGHT, TOP);
+  rightCanvas.text("Time left: " + (timerFinished ? 0 : (120000 - (millis() - startTime)) / 1000) + "s", rightCanvas.width - 20, 20);
+}
+
+void moveShapes() {
+  // Handle triangle (forceValue)
+  if (forceValue >= 500 && !triangleVisible) {
+    // First press: Start triangle movement
+    triangleVisible = true;
+    triangleX = 0;  // Initialize triangle position (start at the left side)
+    trianglexSpeed = 1;  // Set speed to move right
+    pressMillis = millis();  // Record the time of the first press
+  }
+
+  // Move triangle if visible and not stopped
+  if (triangleVisible && trianglexSpeed != 0) {
+    triangleX += trianglexSpeed;  // Move triangle to the right
+  }
+
+  // Stop the triangle after pressing forceValue again, with a 1-second delay
+  if (forceValue >= 500 && millis() - pressMillis > 1000) {
+    if (triangleVisible) {
+      trianglexSpeed = 0;  // Stop the triangle after the delay
+      pressMillis = millis();  // Update pressMillis to avoid immediate next activation
+    }
+  }
+
+  // Handle square (forceValue2)
+  if (forceValue2 >= 500 && !squareVisible) {
+    // First press: Start square movement
+    squareVisible = true;
+    squareX = 0;  // Initialize square position (start at the left side)
+    squarexSpeed = 1;  // Set speed to move right
+    pressMillis = millis();  // Record the time of the first press
+  }
+
+  // Move square if visible and not stopped
+  if (squareVisible && squarexSpeed != 0) {
+    squareX += squarexSpeed;  // Move square to the right
+  }
+
+  // Stop the square after pressing forceValue2 again, with a 1-second delay
+  if (forceValue2 >= 500 && millis() - pressMillis > 1000) {
+    if (squareVisible) {
+      squarexSpeed = 0;  // Stop the square after the delay
+      pressMillis = millis();  // Update pressMillis to avoid immediate next activation
+    }
+  }
+
+  // Handle circle (forceValue3)
+  if (forceValue3 >= 500 && !circleVisible) {
+    // First press: Start circle movement
+    circleVisible = true;
+    circleX = 0;  // Initialize circle position (start at the left side)
+    circlexSpeed = 1;  // Set speed to move right
+    pressMillis = millis();  // Record the time of the first press
+  }
+
+  // Move circle if visible and not stopped
+  if (circleVisible && circlexSpeed != 0) {
+    circleX += circlexSpeed;  // Move circle to the right
+  }
+
+  // Stop the circle after pressing forceValue3 again, with a 1-second delay
+  if (forceValue3 >= 500 && millis() - pressMillis > 1000) {
+    if (circleVisible) {
+      circlexSpeed = 0;  // Stop the circle after the delay
+      pressMillis = millis();  // Update pressMillis to avoid immediate next activation
+    }
+  }
+   if (trianglexSpeed == 0 && squarexSpeed == 0 && circlexSpeed == 0 && !soundPlayed) {
+    // All shapes have stopped, trigger sound
+    soundEffect.play();
+    soundPlayed = true;  // Ensure the sound is played only once
+  }
+}
+  
+void displayShapes() {
+
+  if (triangleVisible) {
+    if (forceValue4 >=500) {
+    triangleColorIndex = (triangleColorIndex+1) % triangleColors.length;
+    }
+    rightCanvas.fill(triangleColors[triangleColorIndex]);
+    rightCanvas.stroke(0);
+    rightCanvas.triangle(triangleX, 120, triangleX - 50, 230, triangleX + 150, 230);
+  }
+
+  if (squareVisible) {
+    if (forceValue5 >= 500) {
+    squareColorIndex = (squareColorIndex+1) % squareColors.length;
+    }
+    rightCanvas.fill(0, 255, 0);
+    rightCanvas.rect(squareX, 240, 150, 150);
+    rightCanvas.fill(squareColors[squareColorIndex]);
+    rightCanvas.rect(squareX + 160, 200, 100, 190);
+    rightCanvas.rect(squareX + 265, 270, 50, 120);
+    rightCanvas.fill(0, 0, 255);
+    rightCanvas.rect(squareX + 175, 220, 50, 90);
+  }
+
+
+
+  if (circleVisible) {
+    if (forceValue6 >=500) {
+    circleColorIndex= (circleColorIndex+1) % circleColors.length; 
+    }
+    rightCanvas.fill(circleColors[circleColorIndex]);
+    rightCanvas.circle(circleX, 420, 120);
+    rightCanvas.circle(circleX + 170, 420, 120);
+  }
+}
+
+
+void level2() {
+  
+  getSerialData();
+  forceValue = arduinoValues[0];
+  forceValue2= arduinoValues [1];
+  forceValue4 = arduinoValues[3];
+  forceValue3 = arduinoValues[2];
+ 
+
+  // Background color change on Sensor 4 press
+  if (forceValue4 >= 500 && !colorChanged) {
+    currentBackgroundColorIndex = (int) random(3); // Randomly pick a background color
+    colorChanged = true;
+  }
+
+  if (forceValue4 < 500 && colorChanged) {
+    colorChanged = false;
+  }
+
+  // Petal color change on Sensor 3 press
+  if (forceValue3 >= 500 && !petalColorChanged) {
+    currentPetalColorIndex = (currentPetalColorIndex + 1) % 6; // Cycle through 6 petal colors
+    petalColorChanged = true;
+  }
+
+  if (forceValue3 < 500 && petalColorChanged) {
+    petalColorChanged = false;
+  }
+
+  // Set the background color based on the random index
+  background(timeOfDayColors[currentBackgroundColorIndex]);
+  image(level2Image, 0, 0, width / 2, height);
+
+  // Drawing the canvas
+  rightCanvas.beginDraw();
+  rightCanvas.background(timeOfDayColors[currentBackgroundColorIndex]);
+  rightCanvas.textFont(descriptionFont);
+  rightCanvas.fill(6, 5, 6);
+  rightCanvas.textSize(25);
+  rightCanvas.textAlign(CENTER, TOP);
+  rightCanvas.text("Try to match the colors of the picture", rightCanvas.width / 2, 50);
+  
+  if (timeOfDayColors[currentBackgroundColorIndex] == color(135, 206, 235) && 
+      petalColors[currentPetalColorIndex] == color(255, 105, 180)) {
+    playflowerSound ();
+  }
+
+  // Initialize and draw the flowers
+  initializeDraw();
+  rightCanvas.endDraw();
+
+  image(rightCanvas, width / 2, 0);
+}
+
+void playflowerSound() {
+  // Play the sound only if it isn't already playing
+  if (!flowerSound.isPlaying()) {
+    flowerSound.play();
+    soundStartMillis = millis();  // Record the start time of the sound
+  }
+  
+  // Stop the sound after 3 seconds
+  if (soundStartMillis != -1 && millis() - soundStartMillis >= 3000) {
+    flowerSound.stop();  // Stop the sound after 3 seconds
+    soundStartMillis = -1;
+  }
+}
+
+void initializeDraw() {
+  // Draw the grass (fixed area at the bottom)
+  rightCanvas.fill(34, 139, 34); // Grass color (green)
+  rightCanvas.noStroke();
+  float grassHeight = rightCanvas.height / 4;
+  rightCanvas.rect(0, rightCanvas.height - grassHeight, rightCanvas.width, grassHeight);
+
+  // Draw the flowers
+  for (int i = 0; i < 60; i++) {
+    // Draw each flower with the current petal color
+    color flowerColor = petalColors[currentPetalColorIndex];
+    drawFlower(xs[i], ys[i], sizes[i], flowerColor);
+    
+    // Update flower positions based on speed
+    xs[i] += xspeed[i];
+    ys[i] += yspeed[i];
+
+    // Handle wall collisions for flowers
+    if (xs[i] > rightCanvas.width || xs[i] < 0) {
+      xspeed[i] *= -1;
+    }
+
+    if (ys[i] > rightCanvas.height - grassHeight) {
+      yspeed[i] *= -1;
+      ys[i] = rightCanvas.height - grassHeight;
+    }
+
+    if (ys[i] < rightCanvas.height / 2) {
+      yspeed[i] *= -1;
+      ys[i] = rightCanvas.height / 2;
+    }
+  }
+  if (forceValue2 >= 500 && !sunDrawn) {
+    drawSun();
+    sunDrawn = true;  // Ensure we don't draw sun again unless sensor is released
+  }
+
+  if (forceValue2 < 500) {
+    sunDrawn = false;  // Reset so sun can be drawn again next time sensor is pressed
+  }
+}
+
+// Function to draw the sun on the canvas
+void drawSun() {
+  float sunX = random(width / 2, width);  // Random X position for the sun
+  float sunY = random(height / 4, height / 2);  // Random Y position for the sun
+  
+  // Draw the sun image (adjust size as needed)
+  rightCanvas.image(sunImage, sunX, sunY, 100, 100);
+}
+
+void drawFlower(float x, float y, float size, color flowerColor) {
+  float petalWidth = size * 0.6;  // Petal width (relative to flower size)
+  float petalHeight = size * 1.2; // Petal height (relative to flower size)
+
+  // Draw the 4 petals (arranged in 4 directions)
+  rightCanvas.fill(flowerColor);
+  rightCanvas.noStroke();
+  
+  // Petal 1 (Top)
+  rightCanvas.ellipse(x, y - size / 2, petalWidth, petalHeight);
+  
+  // Petal 2 (Right)
+  rightCanvas.ellipse(x + size / 2, y, petalWidth, petalHeight);
+  
+  // Petal 3 (Bottom)
+  rightCanvas.ellipse(x, y + size / 2, petalWidth, petalHeight);
+  
+  // Petal 4 (Left)
+  rightCanvas.ellipse(x - size / 2, y, petalWidth, petalHeight);
+  
+  // Draw the center of the flower (a small circle)
+  rightCanvas.stroke(0);
+  rightCanvas.fill(255, 215, 0);  // Yellow center (you can change the color)
+  rightCanvas.ellipse(x, y, size * 0.4, size * 0.4);  // Center circle (smaller than petals)
+}
+
+void getSerialData() {
+  while (myPort.available() > 0) {
+    String in = myPort.readStringUntil('\n');
+    if (in != null) {
+      //print("From Arduino: " + in);
+      String[] serialInArray = split(trim(in), ",");
+      if (serialInArray.length == NUM_OF_VALUES_FROM_ARDUINO) {
+        for (int i = 0; i < serialInArray.length; i++) {
+          arduinoValues[i] = int(serialInArray[i]);
+        }
+      }
+    }
+  }
+}
